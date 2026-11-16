@@ -37,7 +37,7 @@ export default function Outfits() {
           }}
           onLongPress={() => confirmDelete(item)}
         >
-          <Mannequin width={120} compact slots={item.slots} garmentById={store.garmentById} skinTone={store.profile.skinTone} facePhotoUri={store.profile.facePhotoUri} />
+          <Mannequin width={120} compact slots={item.slots} garmentById={store.garmentById} skinTone={store.profile.skinTone} body={store.profile.body} facePhotoUri={store.profile.facePhotoUri} />
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
         </Pressable>
       )}

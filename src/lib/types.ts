@@ -1,3 +1,5 @@
+import { BodyMeasurements } from './body/measurements';
+
 export type Category = 'top' | 'bottom' | 'shoes' | 'outerwear' | 'dress' | 'accessory';
 
 export const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
@@ -9,6 +11,14 @@ export const CATEGORIES: { key: Category; label: string; emoji: string }[] = [
   { key: 'accessory', label: 'Accesorios', emoji: '👜' },
 ];
 
+/** Shape of a background-removed garment (computed by the server, see server/segment.ts). */
+export interface GarmentFit {
+  aspect: number;
+  rows: ([number, number] | null)[];
+  pieces: number;
+  method: 'cloth' | 'object';
+}
+
 export interface Garment {
   id: string;
   name: string;
@@ -18,6 +28,11 @@ export interface Garment {
   brand?: string;
   price?: string;
   color?: string;
+  /** Background-removed image ("local:<file>" on device). */
+  cutoutUrl?: string;
+  fit?: GarmentFit;
+  cutoutStatus?: 'processing' | 'done' | 'failed';
+  cutoutError?: string;
   createdAt: number;
 }
 
@@ -36,6 +51,7 @@ export interface Outfit {
 export interface Profile {
   facePhotoUri?: string;
   skinTone: string;
+  body: BodyMeasurements;
   isPremium: boolean;
   aiScansUsed: number;
 }

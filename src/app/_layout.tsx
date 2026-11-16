@@ -19,6 +19,7 @@ function Root() {
       <Stack.Screen name="add" options={{ presentation: 'modal', title: 'Añadir prenda' }} />
       <Stack.Screen name="pick/[slot]" options={{ presentation: 'modal', title: 'Elige una prenda' }} />
       <Stack.Screen name="garment/[id]" options={{ title: 'Prenda' }} />
+      <Stack.Screen name="body" options={{ title: 'Configuración de maniquí' }} />
       <Stack.Screen name="paywall" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>
   );

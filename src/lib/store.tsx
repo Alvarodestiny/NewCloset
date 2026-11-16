@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { randomUUID } from 'expo-crypto';
 import { createContext, ReactNode, useContext, useEffect, useReducer, useRef } from 'react';
+import { BodyMeasurements, clampBody, DEFAULT_BODY } from './body/measurements';
+import { cutoutAvailable, deleteLocalImage, requestCutout } from './cutout';
 import { Garment, Outfit, OutfitSlots, Profile, Slot } from './types';
 
 export const FREE_LIMITS = { garments: 25, outfits: 3, aiScans: 1 };
@@ -18,13 +20,14 @@ const initialState: State = {
   garments: [],
   outfits: [],
   current: {},
-  profile: { skinTone: '#E8C4A8', isPremium: false, aiScansUsed: 0 },
+  profile: { skinTone: '#E8C4A8', body: DEFAULT_BODY.female, isPremium: false, aiScansUsed: 0 },
 };
 
 type Action =
   | { type: 'hydrate'; state: Partial<State> }
   | { type: 'addGarment'; garment: Garment }
   | { type: 'updateGarment'; garment: Garment }
+  | { type: 'patchGarment'; id: string; patch: Partial<Garment> }
   | { type: 'removeGarment'; id: string }
   | { type: 'wear'; slot: Slot; garmentId?: string }
   | { type: 'setCurrent'; slots: OutfitSlots }
@@ -34,12 +37,18 @@ type Action =
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
-    case 'hydrate':
-      return { ...state, ...action.state, profile: { ...state.profile, ...action.state.profile }, ready: true };
+    case 'hydrate': {
+      const garments = (action.state.garments ?? state.garments).map((g) =>
+        g.cutoutStatus === 'processing' ? { ...g, cutoutStatus: 'failed' as const, cutoutError: 'Interrumpido' } : g,
+      );
+      return { ...state, ...action.state, garments, profile: { ...state.profile, ...action.state.profile }, ready: true };
+    }
     case 'addGarment':
       return { ...state, garments: [action.garment, ...state.garments] };
     case 'updateGarment':
       return { ...state, garments: state.garments.map((g) => (g.id === action.garment.id ? action.garment : g)) };
+    case 'patchGarment':
+      return { ...state, garments: state.garments.map((g) => (g.id === action.id ? { ...g, ...action.patch } : g)) };
     case 'removeGarment': {
       const strip = (slots: OutfitSlots) =>
         Object.fromEntries(Object.entries(slots).filter(([, id]) => id !== action.id)) as OutfitSlots;
@@ -91,6 +100,9 @@ interface Store extends State {
   saveOutfit: (name: string) => void;
   removeOutfit: (id: string) => void;
   updateProfile: (patch: Partial<Profile>) => void;
+  setBody: (body: BodyMeasurements) => void;
+  /** Removes the background of a garment photo (runs on the server). */
+  processCutout: (garment: Garment) => Promise<void>;
   garmentById: (id?: string) => Garment | undefined;
 }
 
@@ -127,13 +139,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       return garment;
     },
     updateGarment: (garment) => dispatch({ type: 'updateGarment', garment }),
-    removeGarment: (id) => dispatch({ type: 'removeGarment', id }),
+    removeGarment: (id) => {
+      const g = state.garments.find((x) => x.id === id);
+      deleteLocalImage(g?.cutoutUrl);
+      deleteLocalImage(g?.imageUrl);
+      dispatch({ type: 'removeGarment', id });
+    },
     wear: (slot, garmentId) => dispatch({ type: 'wear', slot, garmentId }),
     setCurrent: (slots) => dispatch({ type: 'setCurrent', slots }),
     saveOutfit: (name) =>
       dispatch({ type: 'saveOutfit', outfit: { id: randomUUID(), name, slots: state.current, createdAt: Date.now() } }),
     removeOutfit: (id) => dispatch({ type: 'removeOutfit', id }),
     updateProfile: (patch) => dispatch({ type: 'updateProfile', patch }),
+    setBody: (body) => dispatch({ type: 'updateProfile', patch: { body: clampBody(body) } }),
+    processCutout: async (garment) => {
+      if (!cutoutAvailable() || !garment.imageUrl) return;
+      dispatch({ type: 'patchGarment', id: garment.id, patch: { cutoutStatus: 'processing', cutoutError: undefined } });
+      try {
+        const { cutoutUrl, fit } = await requestCutout(garment);
+        deleteLocalImage(garment.cutoutUrl);
+        dispatch({ type: 'patchGarment', id: garment.id, patch: { cutoutUrl, fit, cutoutStatus: 'done' } });
+      } catch (e) {
+        dispatch({ type: 'patchGarment', id: garment.id, patch: { cutoutStatus: 'failed', cutoutError: (e as Error).message } });
+      }
+    },
     garmentById: (id) => (id ? state.garments.find((g) => g.id === id) : undefined),
   };
 

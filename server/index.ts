@@ -1,6 +1,10 @@
 /**
  * NewCloset AI backend.
  *
+ * POST /cutout    { imageUrl | image: <base64>, category }
+ *   Removes the background (free, runs locally with ONNX models) and returns
+ *   a transparent WebP plus the garment's shape so the app can fit it.
+ *
  * POST /identify  { image: <base64>, mediaType: "image/jpeg" }
  *   1. Claude looks at the photo and describes the garment (structured output).
  *   2. Claude runs a web search to find shops that sell it.
@@ -11,7 +15,10 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { z } from 'zod';
+import { Category, cutout } from './segment.ts';
 
 const client = new Anthropic();
 const MODEL = 'claude-opus-5-5';
@@ -79,6 +86,34 @@ async function findShops(query: string) {
   return results.slice(0, 8);
 }
 
+const CATEGORIES: Category[] = ['top', 'bottom', 'shoes', 'outerwear', 'dress', 'accessory'];
+
+function isPrivateIp(ip: string) {
+  return (
+    /^(10\.|127\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip) ||
+    ip === '::1' ||
+    /^f[cd]/i.test(ip) ||
+    /^fe80/i.test(ip) ||
+    ip.startsWith('::ffff:127.')
+  );
+}
+
+/** Downloads a shop image, refusing internal addresses (SSRF protection). */
+async function downloadImage(rawUrl: string): Promise<Buffer> {
+  const url = new URL(rawUrl);
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') throw new Error('URL de imagen no válida');
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const addresses = isIP(host) ? [host] : (await lookup(host, { all: true })).map((a) => a.address);
+  if (addresses.some(isPrivateIp)) throw new Error('URL de imagen no válida');
+  const res = await fetch(url, { redirect: 'error', headers: { 'User-Agent': 'Mozilla/5.0 NewCloset' } });
+  if (!res.ok) throw new Error(`No se pudo descargar la imagen (${res.status})`);
+  const len = Number(res.headers.get('content-length') ?? 0);
+  if (len > MAX_BODY) throw new Error('Imagen demasiado grande');
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > MAX_BODY) throw new Error('Imagen demasiado grande');
+  return buf;
+}
+
 function send(res: ServerResponse, status: number, body: unknown) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' });
   res.end(JSON.stringify(body));
@@ -98,6 +133,19 @@ async function readJson(req: IncomingMessage): Promise<any> {
 createServer(async (req, res) => {
   if (req.method === 'OPTIONS') return send(res, 204, {});
   if (req.method === 'GET' && req.url === '/health') return send(res, 200, { ok: true });
+  if (req.method === 'POST' && req.url === '/cutout') {
+    try {
+      const { image, imageUrl, category } = await readJson(req);
+      if (!CATEGORIES.includes(category)) return send(res, 400, { error: 'Categoría no válida' });
+      const input = typeof image === 'string' && image ? Buffer.from(image, 'base64') : typeof imageUrl === 'string' ? await downloadImage(imageUrl) : null;
+      if (!input) return send(res, 400, { error: 'Falta la imagen' });
+      const out = await cutout(input, category);
+      return send(res, 200, { image: out.data.toString('base64'), mediaType: 'image/webp', width: out.width, height: out.height, fit: out.fit });
+    } catch (err) {
+      console.error('cutout', err);
+      return send(res, 422, { error: (err as Error).message || 'No se pudo recortar la prenda' });
+    }
+  }
   if (req.method !== 'POST' || req.url !== '/identify') return send(res, 404, { error: 'Not found' });
 
   try {

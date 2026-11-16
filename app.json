@@ -37,7 +37,8 @@
           "cameraPermission": "NewCloset usa la cámara para fotografiar prendas y hacer un selfie para tu maniquí.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-font"
     ],
     "scheme": "newcloset",
     "experiments": {

@@ -58,13 +58,14 @@ export default function FittingRoom() {
           width={mannequinWidth}
           slots={store.current}
           garmentById={store.garmentById}
-          skinTone={store.profile.skinTone}
+          skinTone={store.profile.skinTone} body={store.profile.body}
           facePhotoUri={store.profile.facePhotoUri}
           onPressSlot={openSlot}
           onPressFace={() => router.push('/profile')}
         />
       </View>
 
+      <Button title="🧍 Configurar maniquí" variant="secondary" onPress={() => router.push('/body')} style={{ marginBottom: 10 }} />
       <View style={styles.row}>
         <Button title="🔀 Aleatorio" variant="secondary" onPress={shuffle} disabled={store.garments.length === 0} style={styles.flex} />
         <Button title="Limpiar" variant="secondary" onPress={() => store.setCurrent({})} disabled={worn === 0} style={styles.flex} />

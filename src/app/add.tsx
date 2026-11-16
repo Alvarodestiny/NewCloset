@@ -86,6 +86,7 @@ export default function AddGarment() {
   const save = (g: GarmentDraft) => {
     const saved = store.addGarment(g);
     store.wear(saved.category, saved.id);
+    store.processCutout(saved); // background removal runs while the user sees the mannequin
     router.dismissTo('/');
   };
 
