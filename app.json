@@ -1,0 +1,47 @@
+{
+  "expo": {
+    "name": "NewCloset",
+    "slug": "newcloset",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.newcloset.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F4EF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.newcloset.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "NewCloset usa tus fotos para añadir prendas a tu armario y poner tu cara en el maniquí.",
+          "cameraPermission": "NewCloset usa la cámara para fotografiar prendas y hacer un selfie para tu maniquí.",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "scheme": "newcloset",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
